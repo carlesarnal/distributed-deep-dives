@@ -175,7 +175,7 @@ This is the thought leadership play. The articles position you as someone who *u
 
 These articles should be **rooted in real experience**, not generic tutorials. Each one should reference your actual work (Apicurio contributions, reddit pipeline, production debugging).
 
-### Article 1: "Why Schema References Break in Avro"
+### Article 1: "Why Schema References Break in Avro" — DONE (commit 33eeb40)
 
 **Target audience:** Engineers using Avro + Schema Registry who hit reference resolution failures.
 
@@ -193,7 +193,7 @@ These articles should be **rooted in real experience**, not generic tutorials. E
 
 **Estimated effort:** 2-3 focused writing sessions
 
-### Article 2: "Designing Schema Evolution for Event Systems"
+### Article 2: "Designing Schema Evolution for Event Systems" — DONE (commit 33eeb40)
 
 **Target audience:** Engineers building event-driven architectures who need to evolve schemas without breaking consumers.
 
@@ -212,7 +212,7 @@ These articles should be **rooted in real experience**, not generic tutorials. E
 
 **Estimated effort:** 2-3 writing sessions
 
-### Article 3: "Real-time vs Batch ML Inference: Tradeoffs at Scale"
+### Article 3: "Real-time vs Batch ML Inference: Tradeoffs at Scale" — DONE (commit 33eeb40)
 
 **Target audience:** ML engineers and platform engineers deciding between real-time and batch inference.
 
@@ -281,15 +281,16 @@ Phase 2 (Week 3-4): Failure handling
 └── B3: Write ADRs for all decisions made in Phase 1 and 2 ✅ DONE
 
 Phase 3 (Week 5-8): Deep dive articles
-├── C1: "Why Schema References Break in Avro" (draw from Apicurio experience)
-├── C2: "Designing Schema Evolution for Event Systems" (reference reddit pipeline schemas)
-├── C3: "Real-time vs Batch ML Inference" (reference pipeline metrics from Phase 1)
+├── C1: "Why Schema References Break in Avro" (draw from Apicurio experience) ✅ DONE
+├── C2: "Designing Schema Evolution for Event Systems" (reference reddit pipeline schemas) ✅ DONE
+├── C3: "Real-time vs Batch ML Inference" (reference pipeline metrics from Phase 1) ✅ DONE
 └── C4: (Optional) "RAG with Schema Registry"
 
 Phase 4 (Week 8): Polish
-├── Update reddit-realtime-classification README with Grafana screenshots
-├── Update distributed-deep-dives README as article index
+├── Update reddit-realtime-classification README ✅ DONE
+├── Update distributed-deep-dives README as article index ✅ DONE
 ├── Update GitHub profile README to link deep dives
+├── Build personal website (carlesarnal.github.io) with deep dive blog ✅ DONE
 └── Update hiring signal mapping in plan doc
 ```
 
