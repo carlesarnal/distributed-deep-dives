@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:reddit:predictions:value",
+  "title": "KafkaPredictionsValue",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Reddit post ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Original post title"
+    },
+    "content": {
+      "type": "string",
+      "description": "Cleaned post content"
+    },
+    "transformer_flair": {
+      "type": "string",
+      "description": "Flair predicted by Transformer model"
+    },
+    "transformer_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Transformer prediction confidence"
+    },
+    "sklearn_flair": {
+      "type": "string",
+      "description": "Flair predicted by scikit-learn model"
+    },
+    "sklearn_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "scikit-learn prediction confidence"
+    },
+    "llm_flair": {
+      "type": "string",
+      "description": "Flair predicted by the LLM-based model"
+    },
+    "llm_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "LLM prediction confidence"
+    },
+    "processing_time_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total processing time in milliseconds from ingestion to prediction"
+    },
+    "ensemble_flair": {
+      "type": "string",
+      "description": "Final flair chosen by the ensemble voting strategy across all models"
+    },
+    "ensemble_agreement": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Fraction of models that agreed on the ensemble flair"
+    }
+  },
+  "required": [
+    "id",
+    "transformer_flair",
+    "transformer_confidence",
+    "sklearn_flair",
+    "sklearn_confidence"
+  ]
+}

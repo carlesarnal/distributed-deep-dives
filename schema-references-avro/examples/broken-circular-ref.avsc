@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "BROKEN EXAMPLE: Circular reference between Employee and Department.",
+    "Neither schema can be registered first because each depends on the other.",
+    "The Avro parser will fail with 'unknown type: com.example.hr.Department'",
+    "when parsing employee.avsc, or 'unknown type: com.example.hr.Employee'",
+    "when parsing department.avsc.",
+    "",
+    "This file contains both schemas for illustration purposes.",
+    "In practice, these would be separate .avsc files, which makes the problem worse."
+  ],
+
+  "schemas": {
+    "employee": {
+      "type": "record",
+      "name": "Employee",
+      "namespace": "com.example.hr",
+      "fields": [
+        {
+          "name": "employeeId",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "email",
+          "type": "string"
+        },
+        {
+          "name": "department",
+          "type": "com.example.hr.Department",
+          "_problem": "Department is not yet in the symbol table. Parser fails here."
+        }
+      ]
+    },
+
+    "department": {
+      "type": "record",
+      "name": "Department",
+      "namespace": "com.example.hr",
+      "fields": [
+        {
+          "name": "departmentId",
+          "type": "string"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "budget",
+          "type": "double"
+        },
+        {
+          "name": "manager",
+          "type": "com.example.hr.Employee",
+          "_problem": "Employee is not yet in the symbol table. Parser fails here."
+        }
+      ]
+    }
+  },
+
+  "_fix": [
+    "Option 1: Break the cycle by replacing one reference with a scalar (e.g., managerId string).",
+    "Option 2: Define both types in a single schema with inline definitions.",
+    "Option 3: Use a union with null and self-reference within a single file.",
+    "See fixed-self-contained.avsc for the corrected version."
+  ]
+}

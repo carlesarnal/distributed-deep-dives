@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:reddit:stream:value",
+  "title": "RedditStreamValue",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Reddit post ID"
+    },
+    "content": {
+      "type": "string",
+      "description": "Cleaned and concatenated post content (title + body + comments + domain)"
+    }
+  },
+  "required": ["id", "content"]
+}

@@ -1,0 +1,72 @@
+{
+  "_comment": [
+    "BROKEN EXAMPLE: Version pinning drift.",
+    "UserEvent references Address v1.0.0, but Address has evolved to v2.0.0.",
+    "The pinned reference causes silent data loss: fields added in Address v2",
+    "are dropped when UserEvent resolves to Address v1."
+  ],
+
+  "_address_v1": {
+    "_version": "1.0.0",
+    "_status": "pinned by UserEvent, but outdated",
+    "type": "record",
+    "name": "Address",
+    "namespace": "com.example.shared",
+    "fields": [
+      { "name": "street", "type": "string" },
+      { "name": "city", "type": "string" },
+      { "name": "country", "type": "string" }
+    ]
+  },
+
+  "_address_v2": {
+    "_version": "2.0.0",
+    "_status": "latest version in registry, but UserEvent still points to v1",
+    "type": "record",
+    "name": "Address",
+    "namespace": "com.example.shared",
+    "fields": [
+      { "name": "street", "type": "string" },
+      { "name": "city", "type": "string" },
+      { "name": "state", "type": ["null", "string"], "default": null },
+      { "name": "postalCode", "type": ["null", "string"], "default": null },
+      { "name": "country", "type": "string" }
+    ]
+  },
+
+  "user_event_schema": {
+    "type": "record",
+    "name": "UserEvent",
+    "namespace": "com.example.events",
+    "fields": [
+      { "name": "userId", "type": "string" },
+      { "name": "action", "type": "string" },
+      { "name": "timestamp", "type": "long" },
+      {
+        "name": "address",
+        "type": "com.example.shared.Address"
+      }
+    ]
+  },
+
+  "_reference_metadata": {
+    "name": "com.example.shared.Address",
+    "groupId": "com.example.shared",
+    "artifactId": "Address",
+    "version": "1.0.0",
+    "_problem": "Pinned to v1.0.0. Address v2.0.0 adds state and postalCode fields. Producers writing with Address v2 include state/postalCode, but consumers using UserEvent resolve to Address v1 and silently drop those fields."
+  },
+
+  "_consequences": [
+    "1. Data loss: state and postalCode written by new producers are silently dropped by old consumers.",
+    "2. Compatibility checks pass: UserEvent itself has not changed, so the registry sees no incompatibility.",
+    "3. Updating the pin to v2.0.0 may trigger compatibility failures depending on the compatibility mode.",
+    "4. No runtime error: the deserialized record simply has fewer fields than expected."
+  ],
+
+  "_fix": [
+    "1. Periodically audit pinned versions against latest available versions.",
+    "2. When updating a shared schema, update all referencing schemas in the same changeset.",
+    "3. Better yet, inline the Address definition in UserEvent to avoid the coupling entirely."
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "type": "record",
+  "name": "OrderEvent",
+  "namespace": "com.example.events",
+  "doc": "Self-contained order event schema. All types are defined inline, eliminating external reference dependencies. This schema can be registered, parsed, and evolved independently.",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Unique identifier for the order."
+    },
+    {
+      "name": "timestamp",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Epoch milliseconds when the event was produced."
+    },
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "OrderEventType",
+        "doc": "Type of order lifecycle event.",
+        "symbols": [
+          "CREATED",
+          "CONFIRMED",
+          "PAYMENT_RECEIVED",
+          "SHIPPED",
+          "DELIVERED",
+          "CANCELLED",
+          "REFUNDED"
+        ]
+      }
+    },
+    {
+      "name": "customer",
+      "type": {
+        "type": "record",
+        "name": "OrderCustomer",
+        "doc": "Customer information as captured at order time. Deliberately scoped to this event - not a shared Customer type.",
+        "fields": [
+          { "name": "customerId", "type": "string" },
+          { "name": "name", "type": "string" },
+          { "name": "email", "type": "string" },
+          {
+            "name": "loyaltyTier",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Optional loyalty tier at order time."
+          }
+        ]
+      }
+    },
+    {
+      "name": "shippingAddress",
+      "type": {
+        "type": "record",
+        "name": "OrderAddress",
+        "doc": "Address as captured at order time. Named OrderAddress (not Address) to avoid namespace collisions with other schemas that define their own address types.",
+        "fields": [
+          { "name": "street", "type": "string" },
+          { "name": "city", "type": "string" },
+          {
+            "name": "state",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "State or province. Nullable for countries without states."
+          },
+          {
+            "name": "postalCode",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "Postal or ZIP code. Nullable for countries without postal codes."
+          },
+          { "name": "country", "type": "string" }
+        ]
+      }
+    },
+    {
+      "name": "billingAddress",
+      "type": "OrderAddress",
+      "doc": "Reuses OrderAddress by name - this is an intra-schema reference, which is safe and always works."
+    },
+    {
+      "name": "items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "OrderLineItem",
+          "fields": [
+            { "name": "productId", "type": "string" },
+            { "name": "productName", "type": "string" },
+            { "name": "quantity", "type": "int" },
+            { "name": "unitPrice", "type": "double" },
+            {
+              "name": "currency",
+              "type": "string",
+              "default": "USD",
+              "doc": "ISO 4217 currency code."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "payment",
+      "type": {
+        "type": "record",
+        "name": "OrderPayment",
+        "doc": "Payment details scoped to this order event.",
+        "fields": [
+          { "name": "paymentId", "type": "string" },
+          {
+            "name": "method",
+            "type": {
+              "type": "enum",
+              "name": "PaymentMethod",
+              "symbols": ["CREDIT_CARD", "DEBIT_CARD", "BANK_TRANSFER", "PAYPAL", "CRYPTO", "OTHER"]
+            }
+          },
+          { "name": "amount", "type": "double" },
+          {
+            "name": "currency",
+            "type": "string",
+            "default": "USD"
+          },
+          {
+            "name": "transactionRef",
+            "type": ["null", "string"],
+            "default": null,
+            "doc": "External payment processor transaction reference."
+          }
+        ]
+      }
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "record",
+        "name": "OrderEventMetadata",
+        "doc": "Event metadata. Named OrderEventMetadata to avoid collisions with other schemas' metadata types.",
+        "fields": [
+          {
+            "name": "correlationId",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "source",
+            "type": "string",
+            "doc": "Service that produced this event."
+          },
+          {
+            "name": "schemaVersion",
+            "type": "string",
+            "default": "1.0.0",
+            "doc": "Version of this schema, embedded in the payload for debugging."
+          }
+        ]
+      }
+    }
+  ]
+}
