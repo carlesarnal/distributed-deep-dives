@@ -71,7 +71,7 @@ distributed-deep-dives/
 
 - **[reddit-realtime-classification](https://github.com/carlesarnal/reddit-realtime-classification)** — The ML pipeline referenced throughout these articles
 - **[Apicurio Registry](https://github.com/Apicurio/apicurio-registry)** — The schema registry I contribute to at IBM
-- **[apicurio-registry-support-chat](https://github.com/carlesarnal/apicurio-registry-support-chat)** — RAG chatbot using registry artifacts as the knowledge backend
+- **[apicurio-registry support-chat](https://github.com/Apicurio/apicurio-registry/tree/main/support-chat)** — RAG chatbot using registry artifacts as the knowledge backend
 
 ## Author
 

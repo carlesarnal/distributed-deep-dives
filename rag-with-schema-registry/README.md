@@ -26,7 +26,7 @@ I imposed on myself: every piece of configuration that shapes the chatbot's beha
 its system prompt, its chat prompt template, its model metadata -- must live in a schema
 registry, versioned and governed like any other contract in a distributed system.
 
-The result is [apicurio-registry-support-chat](https://github.com/Apicurio/apicurio-registry-support-chat),
+The result is [support-chat](https://github.com/Apicurio/apicurio-registry/tree/main/support-chat),
 a Quarkus application that uses Retrieval-Augmented Generation (RAG) to answer questions
 about Apicurio Registry, with Apicurio Registry itself serving as the backend for prompt
 management and model metadata. Yes, the chatbot uses the product it supports to manage
@@ -118,7 +118,7 @@ problem. And contract management is what registries do.
 
 ### The Full System
 
-The apicurio-registry-support-chat system has four components:
+The support-chat system has four components:
 
 ```
 +------------------+     +-------------------+     +------------------+
@@ -945,8 +945,8 @@ The project is designed to run with a single `docker-compose up`:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Apicurio/apicurio-registry-support-chat.git
-cd apicurio-registry-support-chat
+git clone https://github.com/Apicurio/apicurio-registry.git
+cd apicurio-registry/support-chat
 
 # Start all services
 docker compose up -d
@@ -989,7 +989,7 @@ just need to recognize it as an instance of a problem we have already solved. Sc
 registries provide versioning, governance, rollback, and runtime resolution for data
 contracts. Prompt templates are data contracts. The connection is direct.
 
-The apicurio-registry-support-chat project demonstrates this by using Apicurio Registry
+The support-chat project demonstrates this by using Apicurio Registry
 to manage prompt templates and model metadata for a RAG-powered support chatbot. The
 architecture is simple: Quarkus for orchestration, LangChain4j for LLM abstraction,
 Ollama for local inference, and Apicurio Registry for prompt governance.
@@ -1017,5 +1017,5 @@ already have a prompt management system -- you just have not used it that way ye
 
 *Carles Arnal is a Principal Software Engineer at IBM and a core contributor to
 [Apicurio Registry](https://github.com/Apicurio/apicurio-registry). The
-apicurio-registry-support-chat project is open source and available on
-[GitHub](https://github.com/Apicurio/apicurio-registry-support-chat).*
+support-chat project is open source and available on
+[GitHub](https://github.com/Apicurio/apicurio-registry/tree/main/support-chat).*

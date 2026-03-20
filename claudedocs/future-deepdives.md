@@ -8,7 +8,7 @@ Ranked by differentiation potential — how uniquely Carles's experience positio
 
 ### 1. "Building a RAG Chatbot with Schema Registry as the Knowledge Backend" -- DONE
 
-**Source project:** [apicurio-registry-support-chat](https://github.com/carlesarnal/apicurio-registry-support-chat)
+**Source project:** [apicurio-registry/support-chat](https://github.com/Apicurio/apicurio-registry/tree/main/support-chat)
 
 Nobody else has done this — using a schema registry to store versioned prompt templates as registry artifacts, then feeding them to a RAG chatbot. This is a unique intersection of schema governance and LLM tooling.
 
