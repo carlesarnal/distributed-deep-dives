@@ -1,0 +1,134 @@
+{
+  "_comment": "Example of a well-designed MCP tool definition for the Apicurio Registry MCP server. This shows how to structure a tool with typed parameters, rich descriptions, and sensible defaults so that an AI agent can discover and use it correctly.",
+
+  "name": "search_artifacts",
+  "description": "Search for artifacts across all groups in the Apicurio Registry. Returns artifacts matching the specified filter criteria. Unlike list_artifacts (which returns all artifacts in a single group), search_artifacts works across all groups and supports flexible text-based filtering. Results are paginated — use 'offset' and 'limit' to navigate large result sets. Returns up to 20 results by default, maximum 500 per request.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Filter by artifact name. Performs a case-insensitive substring match. Example: 'user' matches 'user-event', 'UserProfile', and 'new-user-created'."
+      },
+      "description": {
+        "type": "string",
+        "description": "Filter by artifact description. Performs a case-insensitive substring match on the artifact's description metadata field."
+      },
+      "groupId": {
+        "type": "string",
+        "description": "Filter by group ID to limit search to a specific group. Use 'default' for the default group. Omit to search across all groups."
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Filter by labels. Returns only artifacts that have ALL of the specified labels. Labels are case-sensitive. Example: ['kafka', 'production'] returns artifacts labeled with both 'kafka' AND 'production'."
+      },
+      "artifactType": {
+        "type": "string",
+        "enum": [
+          "AVRO",
+          "PROTOBUF",
+          "JSON",
+          "OPENAPI",
+          "ASYNCAPI",
+          "GRAPHQL",
+          "KCONNECT",
+          "WSDL",
+          "XSD",
+          "XML",
+          "PROMPT_TEMPLATE"
+        ],
+        "description": "Filter by artifact type. Only returns artifacts of the specified type. Use get_artifact_types to see all supported types for this registry instance."
+      },
+      "offset": {
+        "type": "integer",
+        "description": "Pagination offset (0-based). Skip this many results before returning. Default: 0. Use in combination with 'limit' to paginate through large result sets.",
+        "default": 0,
+        "minimum": 0
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of results to return per request. Default: 20. Maximum: 500. If the total result count exceeds this limit, use 'offset' to fetch subsequent pages.",
+        "default": 20,
+        "minimum": 1,
+        "maximum": 500
+      },
+      "orderby": {
+        "type": "string",
+        "enum": ["name", "createdOn", "modifiedOn", "groupId", "artifactId"],
+        "description": "Field to order results by. Default ordering is by 'name'. Use 'createdOn' to see newest/oldest artifacts, 'modifiedOn' to see recently changed artifacts."
+      },
+      "order": {
+        "type": "string",
+        "enum": ["asc", "desc"],
+        "description": "Sort order direction. 'asc' for ascending (A-Z, oldest first), 'desc' for descending (Z-A, newest first). Default: 'asc'."
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+
+  "_example_calls": [
+    {
+      "_description": "Find all Avro schemas related to Kafka",
+      "arguments": {
+        "name": "kafka",
+        "artifactType": "AVRO"
+      }
+    },
+    {
+      "_description": "List all production schemas, newest first",
+      "arguments": {
+        "labels": ["production"],
+        "orderby": "createdOn",
+        "order": "desc"
+      }
+    },
+    {
+      "_description": "Get the second page of results from the reddit-realtime group",
+      "arguments": {
+        "groupId": "reddit-realtime",
+        "offset": 20,
+        "limit": 20
+      }
+    }
+  ],
+
+  "_example_response": {
+    "artifacts": [
+      {
+        "groupId": "reddit-realtime",
+        "artifactId": "reddit-post-raw",
+        "artifactType": "AVRO",
+        "name": "Reddit Post Raw Schema",
+        "description": "Raw Reddit post ingested from the Reddit API before enrichment",
+        "createdOn": "2025-11-15T10:30:00Z",
+        "modifiedOn": "2026-01-20T14:15:00Z",
+        "labels": {
+          "kafka": "",
+          "reddit": "",
+          "raw-event": ""
+        }
+      },
+      {
+        "groupId": "reddit-realtime",
+        "artifactId": "reddit-post-enriched",
+        "artifactType": "AVRO",
+        "name": "Reddit Post Enriched Schema",
+        "description": "Reddit post enriched with sentiment analysis and topic classification",
+        "createdOn": "2025-11-20T09:00:00Z",
+        "modifiedOn": "2026-02-01T11:30:00Z",
+        "labels": {
+          "kafka": "",
+          "reddit": "",
+          "enriched": "",
+          "ml-pipeline": ""
+        }
+      }
+    ],
+    "count": 2,
+    "totalCount": 2
+  }
+}

@@ -1,0 +1,126 @@
+# Prometheus alerting rules for dual-model agreement monitoring.
+#
+# These rules detect model drift, confidence shifts, and zone distribution
+# anomalies without requiring ground truth labels.
+#
+# Deploy to Prometheus via: prometheus.yml -> rule_files: ["drift-alert-rules.yaml"]
+
+groups:
+  - name: model_agreement
+    interval: 30s
+    rules:
+
+      # --- Agreement Rate Alerts ---
+
+      - alert: ModelAgreementWarning
+        expr: model_agreement_rate < 0.75
+        for: 15m
+        labels:
+          severity: warning
+          team: ml-pipeline
+        annotations:
+          summary: "Model agreement rate below 75% for 15 minutes"
+          description: >
+            The agreement rate between Transformer and sklearn models has dropped
+            to {{ $value | humanizePercentage }}. This may indicate data drift,
+            model degradation, or a shift in the input distribution.
+          runbook: "Check per-flair confusion matrix for systematic disagreements."
+
+      - alert: ModelAgreementCritical
+        expr: model_agreement_rate < 0.60
+        for: 5m
+        labels:
+          severity: critical
+          team: ml-pipeline
+        annotations:
+          summary: "Model agreement rate critically low ({{ $value | humanizePercentage }})"
+          description: >
+            Agreement rate has dropped below 60% for 5 minutes. At least one model
+            is likely producing unreliable predictions. Immediate investigation required.
+          runbook: "1. Check recent data samples for distribution shift. 2. Compare per-model prediction distributions. 3. Consider pausing the pipeline if downstream consumers depend on classification accuracy."
+
+      # --- Confidence Distribution Alerts ---
+
+      - alert: TransformerOverconfidence
+        expr: model_confidence_latest{model="transformer"} > 0.98
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Transformer model showing sustained overconfidence"
+          description: >
+            The Transformer's latest confidence scores have been above 0.98 for
+            30 minutes. This may indicate the model is pattern-matching on
+            superficial features rather than genuinely understanding the content.
+
+      - alert: BothModelsLowConfidence
+        expr: |
+          model_confidence_latest{model="transformer"} < 0.4
+            and
+          model_confidence_latest{model="sklearn"} < 0.4
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Both models showing low confidence"
+          description: >
+            Both Transformer and sklearn models have confidence below 0.4 for
+            10 minutes. The incoming data may not fit any of the 13 flair categories,
+            or the models may need retraining on more recent data.
+
+      # --- Zone Distribution Alerts ---
+
+      - alert: HighDisagreementRate
+        expr: >
+          rate(prediction_zones_total{zone="both_confident_disagree"}[10m])
+          /
+          rate(prediction_zones_total[10m])
+          > 0.15
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of confident disagreements between models"
+          description: >
+            More than 15% of predictions have both models confident but predicting
+            different flairs. This suggests ambiguous classification boundaries or
+            a systematic bias in one model.
+
+      - alert: HighUncertaintyRate
+        expr: >
+          rate(prediction_zones_total{zone="both_uncertain"}[10m])
+          /
+          rate(prediction_zones_total[10m])
+          > 0.20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of uncertain predictions from both models"
+          description: >
+            More than 20% of predictions have both models uncertain. The incoming
+            data may have shifted away from the training distribution.
+
+      # --- Processing Health ---
+
+      - alert: HighProcessingLatency
+        expr: histogram_quantile(0.95, rate(flair_processing_latency_seconds_bucket[5m])) > 2.0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 processing latency above 2 seconds"
+          description: >
+            The 95th percentile of message processing latency is {{ $value }}s.
+            This may indicate resource contention or a backlog in the consumer.
+
+      - alert: NoMessagesProcessed
+        expr: rate(pipeline_messages_total{stage="consumed"}[10m]) == 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No messages processed in 15 minutes"
+          description: >
+            The consumer has not processed any messages in 15 minutes.
+            Check Kafka consumer group lag, Spark job status, and producer health.

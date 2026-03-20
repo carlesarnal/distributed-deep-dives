@@ -1,0 +1,101 @@
+version: "3.8"
+
+services:
+
+  # Apicurio Registry - Schema and Prompt Template Registry
+  # Stores PROMPT_TEMPLATE and MODEL_SCHEMA artifacts with full versioning
+  apicurio-registry:
+    image: quay.io/apicurio/apicurio-registry:latest-snapshot
+    container_name: apicurio-registry
+    ports:
+      - "8080:8080"
+    environment:
+      # In-memory storage for development; use SQL or Kafka for production
+      REGISTRY_STORAGE_KIND: "in-memory"
+      LOG_LEVEL: "INFO"
+      QUARKUS_HTTP_CORS: "true"
+      QUARKUS_HTTP_CORS_ORIGINS: "*"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - support-chat-network
+
+  # Ollama - Local LLM and Embedding Model Provider
+  # Serves llama3.2 (chat) and nomic-embed-text (embeddings)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    # Pull required models on first startup
+    entrypoint: >
+      sh -c "
+        ollama serve &
+        sleep 5 &&
+        ollama pull llama3.2 &&
+        ollama pull nomic-embed-text &&
+        wait
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - support-chat-network
+
+  # Support Chat - Quarkus application with RAG pipeline
+  # Connects to both Apicurio Registry (prompts) and Ollama (LLM + embeddings)
+  support-chat:
+    image: quay.io/apicurio/apicurio-registry-support-chat:latest-snapshot
+    container_name: support-chat
+    ports:
+      - "8081:8081"
+    environment:
+      # Quarkus server configuration
+      QUARKUS_HTTP_PORT: 8081
+
+      # Apicurio Registry connection
+      APICURIO_REGISTRY_URL: "http://apicurio-registry:8080/apis/registry/v3"
+
+      # Ollama chat model configuration
+      QUARKUS_LANGCHAIN4J_OLLAMA_BASE_URL: "http://ollama:11434"
+      QUARKUS_LANGCHAIN4J_OLLAMA_CHAT_MODEL_MODEL_ID: "llama3.2"
+      QUARKUS_LANGCHAIN4J_OLLAMA_CHAT_MODEL_TEMPERATURE: "0.7"
+
+      # Ollama embedding model configuration
+      QUARKUS_LANGCHAIN4J_OLLAMA_EMBEDDING_MODEL_MODEL_ID: "nomic-embed-text"
+
+      # RAG pipeline configuration
+      RAG_CHUNK_SIZE: "500"
+      RAG_CHUNK_OVERLAP: "50"
+      RAG_MAX_RESULTS: "5"
+      RAG_MIN_SCORE: "0.6"
+
+      # Prompt template artifact IDs in the registry
+      PROMPT_SYSTEM_ARTIFACT_ID: "apicurio-support-system-prompt"
+      PROMPT_CHAT_ARTIFACT_ID: "apicurio-support-chat-prompt"
+
+      # Cache configuration
+      PROMPT_CACHE_TTL_MINUTES: "5"
+    depends_on:
+      apicurio-registry:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - support-chat-network
+
+volumes:
+  ollama-models:
+    driver: local
+
+networks:
+  support-chat-network:
+    driver: bridge

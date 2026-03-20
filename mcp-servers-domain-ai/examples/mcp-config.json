@@ -1,0 +1,59 @@
+{
+  "_comment": "Example Claude Code MCP server configuration. This file shows how to configure the Apicurio Registry MCP server in your Claude Code settings (typically at ~/.claude/settings.json or in your project's .claude/settings.json).",
+
+  "mcpServers": {
+
+    "apicurio-registry": {
+      "_comment": "Primary Apicurio Registry MCP server — connects to a local development instance.",
+      "command": "java",
+      "args": [
+        "-jar",
+        "/opt/apicurio/apicurio-registry-mcp-server.jar"
+      ],
+      "env": {
+        "REGISTRY_URL": "http://localhost:8080/apis/registry/v3",
+        "REGISTRY_AUTH_ENABLED": "false"
+      }
+    },
+
+    "apicurio-registry-staging": {
+      "_comment": "Staging registry — uses token-based authentication. The REGISTRY_TOKEN environment variable must be set in your shell before launching Claude Code.",
+      "command": "java",
+      "args": [
+        "-jar",
+        "/opt/apicurio/apicurio-registry-mcp-server.jar"
+      ],
+      "env": {
+        "REGISTRY_URL": "https://registry-staging.internal.example.com/apis/registry/v3",
+        "REGISTRY_AUTH_ENABLED": "true",
+        "REGISTRY_AUTH_TYPE": "bearer",
+        "REGISTRY_AUTH_TOKEN": "${REGISTRY_STAGING_TOKEN}",
+        "REGISTRY_READ_ONLY": "false"
+      }
+    },
+
+    "apicurio-registry-production": {
+      "_comment": "Production registry — read-only access. Even though the underlying credentials may have write permissions, the MCP server is configured to reject write operations at the server level.",
+      "command": "java",
+      "args": [
+        "-jar",
+        "/opt/apicurio/apicurio-registry-mcp-server.jar",
+        "--read-only"
+      ],
+      "env": {
+        "REGISTRY_URL": "https://registry.production.example.com/apis/registry/v3",
+        "REGISTRY_AUTH_ENABLED": "true",
+        "REGISTRY_AUTH_TYPE": "bearer",
+        "REGISTRY_AUTH_TOKEN": "${REGISTRY_PROD_TOKEN}",
+        "REGISTRY_READ_ONLY": "true"
+      }
+    }
+  },
+
+  "_usage_notes": {
+    "multiple_servers": "You can configure multiple MCP servers pointing to different registry instances. Claude Code will prefix tool names with the server name when there are conflicts, e.g., 'apicurio-registry-staging__search_artifacts'.",
+    "environment_variables": "Tokens use ${VAR_NAME} syntax to reference environment variables from your shell. Never hardcode secrets in this file.",
+    "read_only_mode": "For production registries, always use --read-only mode. This prevents the AI agent from creating, updating, or deleting artifacts regardless of the underlying credentials.",
+    "file_location": "Place this configuration in ~/.claude/settings.json for global settings, or in your project's .claude/settings.json for project-specific settings."
+  }
+}

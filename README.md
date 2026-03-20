@@ -24,33 +24,47 @@ The inference spectrum isn't binary. Covers why micro-batch was the right choice
 
 **Topics:** Spark Structured Streaming, dual-model agreement rate, PySpark UDF serialization, OpenTelemetry tracing challenges, backpressure design, cost-accuracy tradeoffs
 
+### [Building a RAG Chatbot with Schema Registry as the Knowledge Backend](rag-with-schema-registry/)
+
+Using Apicurio Registry to store versioned prompt templates as PROMPT_TEMPLATE artifacts, then feeding them to a RAG chatbot. A unique intersection of schema governance and LLM tooling — prompt versioning, rollback, and A/B testing using the same infrastructure you use for Kafka schemas.
+
+**Topics:** LangChain4j, Ollama, RAG pipeline, prompt template versioning, embedding model selection, document chunking strategies
+
+### [MCP Servers for Domain-Specific AI Tooling](mcp-servers-domain-ai/)
+
+Building an MCP (Model Context Protocol) server that wraps Apicurio Registry for AI agent use. Designing the tool surface, security considerations, and patterns for wrapping any REST API as an MCP server.
+
+**Topics:** MCP protocol, AI agent tooling, tool surface design, security for AI operations, REST-to-MCP patterns
+
+### [Model Agreement as a Proxy for Ground Truth in Streaming ML](model-agreement-ground-truth/)
+
+When you deploy ML models in a streaming pipeline, you don't have labels. Dual-model agreement rate, disagreement taxonomy, confidence calibration, and drift detection — all without ground truth.
+
+**Topics:** Dual-model monitoring, agreement rate, disagreement zones, confidence calibration, model drift detection, Prometheus alerting
+
 ## Project Structure
 
 ```
 distributed-deep-dives/
 ├── README.md
 ├── schema-references-avro/
-│   ├── README.md                              # Full article
+│   ├── README.md
 │   └── examples/
-│       ├── broken-circular-ref.avsc           # Circular dependency failure
-│       ├── broken-version-pin.avsc            # Version pinning drift
-│       ├── fixed-self-contained.avsc          # Self-contained design pattern
-│       └── register-order.sh                  # Bottom-up registration script
 ├── schema-evolution-events/
-│   ├── README.md                              # Full article
+│   ├── README.md
 │   └── examples/
-│       ├── reddit-stream-v1.json              # Original pipeline schema
-│       ├── reddit-stream-v2-valid.json        # Valid BACKWARD evolution
-│       ├── reddit-stream-v2-invalid.json      # Invalid evolution (breaks compatibility)
-│       ├── kafka-predictions-v2.json          # Adding a third model
-│       └── validate-compatibility.sh          # Apicurio compatibility check script
 ├── realtime-vs-batch-inference/
-│   ├── README.md                              # Full article
+│   ├── README.md
 │   └── examples/
-│       ├── dual-model-udf.py                  # Annotated dual-model UDF pattern
-│       ├── backpressure-config.py             # Spark streaming backpressure config
-│       └── model-serving-migration.py         # Refactor to model serving endpoints
-└── claudedocs/                                # Planning documents
+├── rag-with-schema-registry/
+│   ├── README.md
+│   └── examples/
+├── mcp-servers-domain-ai/
+│   ├── README.md
+│   └── examples/
+└── model-agreement-ground-truth/
+    ├── README.md
+    └── examples/
 ```
 
 ## Related Projects
