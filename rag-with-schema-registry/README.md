@@ -118,83 +118,118 @@ problem. And contract management is what registries do.
 
 ### The Full System
 
-The support-chat system has four components:
+The support-chat system has three components:
 
 ```
-+------------------+     +-------------------+     +------------------+
-|                  |     |                   |     |                  |
-|  Quarkus App     |---->| Apicurio Registry |     |     Ollama       |
-|  (support-chat)  |     |   (port 8080)     |     |   (port 11434)   |
-|  (port 8081)     |---->|                   |     |                  |
-|                  |     +-------------------+     +------------------+
-|                  |           ^                         ^
-|                  |           |                         |
-|                  |-----------+-------------------------+
-|                  |     fetch prompts            LLM chat +
-|                  |     fetch model metadata     embeddings
-+------------------+
++---------------------+     +-------------------+     +------------------+
+|                     |     |                   |     |                  |
+|  Quarkus App        |---->| Apicurio Registry |     |  Google AI       |
+|  (support-chat)     |     |   (port 8080)     |     |  Gemini API      |
+|  (port 8081)        |---->|                   |     |                  |
+|                     |     +-------------------+     +------------------+
+|  ├─ RAG (in-process)|           ^                         ^
+|  └─ ONNX embeddings |           |                         |
+|                     |-----------+-------------------------+
+|                     |     fetch prompts            LLM chat
+|                     |     via /render endpoint
++---------------------+
         |
         v
-  REST API clients
+  REST API + Embeddable Widget
   /support/chat/{sessionId}
   /support/ask
   /support/prompts/{artifactId}
-  /support/models
 ```
 
 **Quarkus application** -- the orchestrator. It handles HTTP requests, manages conversation
 sessions, runs the RAG pipeline, and coordinates between the registry and the LLM. It is
 built with Quarkus because that is the framework I know best, and because `quarkus-langchain4j`
 provides first-class integration with LangChain4j, which handles the LLM abstraction layer.
+The application also serves an embeddable chat widget (`chat-widget.js`) that can be added
+to any website via a single `<script>` tag.
 
-**Apicurio Registry** -- the knowledge backend for prompt templates and model metadata. It
+**Apicurio Registry** -- the knowledge backend for prompt templates. It
 runs as a separate service, typically in a container. The Quarkus app fetches prompt
-templates from it at runtime, meaning prompts can be updated without redeploying the
-application.
+templates from it at runtime via the `/render` endpoint, meaning prompts can be updated
+without redeploying the application.
 
-**Ollama** -- the LLM provider. It runs locally and serves two models: `llama3.2` for
-chat completion and `nomic-embed-text` for generating embeddings. More on why these
-specific models below.
+**Google AI Gemini** -- the LLM provider. The application uses `gemini-2.0-flash` for
+chat completion via the Quarkus LangChain4j Gemini extension. Embeddings run in-process
+using an ONNX model (`bge-small-en-v15-q`), so no external embedding service is needed.
 
-**Docker Compose** -- ties the three services together. The compose file is simple: three
-services, two exposed ports (8080 for the registry, 8081 for the chat app), and Ollama
-on 11434.
+**Docker Compose** -- ties the services together. The compose file is simple: two
+services (registry and chat app), two exposed ports (8080 for the registry, 8081 for
+the chat app). No local LLM server is required since Gemini is a cloud API and
+embeddings run inside the JVM.
 
-### Why Ollama Over OpenAI
+### Why Google AI Gemini
 
-This is a question I get asked frequently. The answer has three parts.
+The initial prototype used Ollama with `llama3.2` for local development. This worked for
+iteration -- no API keys, no cost, no latency concerns. But in production, the tradeoffs
+shifted.
 
-**First, cost.** During development, I was iterating on prompts, embeddings, and chunking
-strategies. Each iteration meant re-ingesting documents, re-embedding chunks, and running
-dozens of test conversations. With OpenAI, that adds up. With Ollama, it is free.
+**Quality.** `gemini-2.0-flash` produces significantly better answers than `llama3.2` for
+documentation questions, especially for multi-step configuration topics. The RAG pipeline
+provides the relevant context, but the LLM still needs to synthesize a coherent, accurate
+answer from that context. Gemini does this more reliably.
 
-**Second, reproducibility.** When I change a prompt template and want to measure the
-impact, I need the model to be deterministic (or as close to deterministic as possible).
-A local Ollama instance with a pinned model version gives me that. OpenAI's models change
-under the hood -- same model name, different behavior over time.
+**Deployment simplicity.** Running Ollama requires a machine with enough RAM and ideally a
+GPU. Google AI Gemini is a cloud API -- no infrastructure to manage, no models to download.
+This made it possible to deploy the chatbot to free-tier cloud services like Render.com
+without GPU instances.
 
-**Third, simplicity.** No API keys. No rate limits. No network latency. No privacy
-concerns about sending documentation content to a third-party API. For a support chatbot
-that answers questions about open-source documentation, these concerns are manageable,
-but eliminating them entirely made development faster.
+**Free tier.** Google AI provides generous free API access through
+[AI Studio](https://aistudio.google.com/apikey), which is sufficient for a community
+support chatbot.
 
-The tradeoff is obvious: `llama3.2` is not GPT-4. The quality of responses is lower for
-complex reasoning tasks. For a documentation support chatbot, this tradeoff is acceptable.
-Most questions are factual retrieval: "How do I configure Apicurio Registry with Kafka
-storage?" The RAG pipeline provides the relevant context, and `llama3.2` is more than
-capable of synthesizing a coherent answer from that context.
+**Swappability.** The architecture does not depend on Gemini. The `@RegisterAiService`
+interface and Quarkus LangChain4j abstraction mean swapping to Ollama, OpenAI, or any
+other provider is a dependency and configuration change:
 
-If you need higher quality, swapping Ollama for OpenAI is a configuration change in
-`application.properties`. The architecture does not change.
+```properties
+# Switch to Ollama for local development
+quarkus.langchain4j.chat-model.provider=ollama
+quarkus.langchain4j.ollama.base-url=http://localhost:11434
+quarkus.langchain4j.ollama.chat-model.model-id=llama3.2
+```
+
+### Why In-Process ONNX Embeddings
+
+The initial prototype used `nomic-embed-text` via Ollama for embeddings. This required
+Ollama to be running as a separate service, adding operational complexity. The current
+version uses `langchain4j-embeddings-bge-small-en-v15-q`, an ONNX model that runs
+directly inside the JVM.
+
+**No external service needed.** The embedding model is a Maven dependency. It loads at
+startup and runs inference on CPU. No GPU, no separate process, no network calls for
+embedding generation.
+
+**Deployment simplicity.** With in-process embeddings, the Docker Compose stack drops from
+three services (registry + Ollama + app) to two services (registry + app). One fewer
+container to deploy, monitor, and troubleshoot.
+
+**Quality.** BGE-small-en-v15 scores competitively on the MTEB benchmark for retrieval
+tasks. For technical documentation, it produces embeddings that reliably distinguish
+between similar but distinct topics (e.g., "Kafka storage configuration" vs "SQL storage
+configuration").
 
 ### Why LangChain4j Over Raw HTTP Calls
 
 LangChain4j provides three things that would be tedious to build from scratch:
 
-1. **Embedding model abstraction.** The `EmbeddingModel` interface lets me swap between
-   `nomic-embed-text`, `all-MiniLM-L6-v2`, or any OpenAI embedding model without changing
-   application code. I used this extensively during development to compare embedding
-   quality.
+1. **`@RegisterAiService` abstraction.** The LLM interaction is defined as a simple
+   Java interface:
+
+   ```java
+   @RegisterAiService
+   public interface SupportAiService {
+       String chat(@UserMessage String message);
+   }
+   ```
+
+   Quarkus LangChain4j generates the implementation at build time, handling provider
+   selection, request formatting, and response parsing. Swapping from Gemini to Ollama
+   is a configuration change -- the interface stays the same.
 
 2. **EmbeddingStore with similarity search.** LangChain4j's in-memory `EmbeddingStore`
    handles vector storage and cosine similarity search. For a chatbot that ingests 12
@@ -202,15 +237,15 @@ LangChain4j provides three things that would be tedious to build from scratch:
    documents, I would swap in a Chroma or Milvus store -- again, a configuration change,
    not an architecture change.
 
-3. **Document abstraction.** The `Document` and `TextSegment` classes provide a clean
-   model for chunked text with metadata. The `DocumentSplitter` implementations handle
-   token-based splitting with overlap, which is surprisingly tricky to get right with
-   raw string manipulation.
+3. **Easy RAG integration.** The `quarkus-langchain4j-easy-rag` extension handles
+   document ingestion, chunking, and embedding with minimal configuration. Combined with
+   the in-process ONNX embedding model, the entire RAG pipeline runs without external
+   services.
 
 What LangChain4j does not provide -- and what I built myself -- is the prompt registry
-integration and the multi-turn conversation management. LangChain4j has its own prompt
-template system, but it does not support fetching templates from an external registry
-with version resolution. That is the custom layer this project adds.
+integration and the multi-turn conversation management. The custom layer uses the
+Apicurio Registry `/render` endpoint to render `PROMPT_TEMPLATE` artifacts with variable
+substitution at runtime.
 
 ---
 
@@ -218,45 +253,55 @@ with version resolution. That is the custom layer this project adds.
 
 ### How PROMPT_TEMPLATE Works
 
-A `PROMPT_TEMPLATE` artifact in Apicurio Registry is, at its core, a text document with
-variable placeholders. Here is what a system prompt looks like when stored as a registry
-artifact:
+A `PROMPT_TEMPLATE` artifact in Apicurio Registry is a YAML document following the
+`https://apicur.io/schemas/prompt-template/v1` schema. Here is what the system prompt
+looks like when stored as a registry artifact:
 
-```json
-{
-  "name": "apicurio-support-system-prompt",
-  "description": "System prompt for the Apicurio Registry support chatbot",
-  "template": "You are a helpful technical support assistant for Apicurio Registry, an open-source schema and API registry. Your role is to help users with questions about installation, configuration, usage, and troubleshooting of Apicurio Registry.\n\nYou should:\n- Provide accurate, technically detailed answers based on the provided context\n- Reference specific configuration properties, API endpoints, or CLI commands when relevant\n- Acknowledge when you don't have enough information to answer fully\n- Suggest consulting the official documentation for the most up-to-date information\n\nYou must not:\n- Make up features or configuration options that don't exist\n- Provide advice about competing products\n- Answer questions unrelated to Apicurio Registry",
-  "variables": [],
-  "metadata": {
-    "category": "system",
-    "model_target": "llama3.2",
-    "author": "carles.arnal"
-  }
-}
+```yaml
+$schema: https://apicur.io/schemas/prompt-template/v1
+templateId: apicurio-support-system-prompt
+name: Apicurio Registry Support Assistant - System Prompt
+description: System prompt for the Apicurio Registry support assistant chatbot
+version: "1.0"
+
+template: |
+  You are a helpful support assistant for Apicurio Registry...
+  ## Key Topics You Can Help With
+  - Artifact types: {{supported_artifact_types}}
+  - Schema validation and compatibility rules
+  - REST API usage (v3)
+  ...
+
+variables:
+  supported_artifact_types:
+    type: string
+    default: "AVRO, PROTOBUF, JSON, OPENAPI, ASYNCAPI, GRAPHQL, KCONNECT, WSDL, XSD, XML, PROMPT_TEMPLATE, MODEL_SCHEMA"
+    description: Comma-separated list of supported artifact types
+
+metadata:
+  author: apicurio-team
+  tags: [support, chatbot, system-prompt]
+  recommendedModels: [gemini-2.0-flash, gpt-4-turbo, claude-3-sonnet]
 ```
 
-And here is the chat prompt template, which is where variable substitution comes in:
+The `variables` section is not just documentation -- it is a contract. Each variable has
+a type, an optional default, and a description. When the application calls the registry's
+`/render` endpoint, the registry validates that all required variables are provided and
+performs the substitution server-side:
 
-```json
-{
-  "name": "apicurio-support-chat-prompt",
-  "description": "Chat prompt template with RAG context and conversation history",
-  "template": "Given the following context from the Apicurio Registry documentation:\n\n---\n{{context}}\n---\n\nAnd the following conversation history:\n{{history}}\n\nPlease answer the following question:\n{{question}}",
-  "variables": ["context", "history", "question"],
-  "metadata": {
-    "category": "chat",
-    "model_target": "llama3.2",
-    "author": "carles.arnal"
-  }
-}
+```java
+// The /render endpoint handles variable substitution
+Map<String, Object> variables = Map.of(
+    "supported_artifact_types", "AVRO, PROTOBUF, JSON, ...",
+    "additional_context", ""
+);
+String rendered = renderPrompt(SYSTEM_PROMPT_ARTIFACT, version, variables);
 ```
 
-The `variables` array is not just documentation -- it is a contract. When the application
-calls `template.apply(Map.of("question", question, "context", ragContext, "history", historyStr))`,
-the template engine validates that all required variables are provided. If you add a new
-variable to the template but forget to update the application code, you get a clear error
-instead of a prompt with unresolved `{{variable}}` placeholders being sent to the LLM.
+This is a key design decision: prompt rendering happens in the registry, not in the
+application. The application sends variables to the `/render` endpoint and receives
+the fully rendered prompt text. This means the application never needs to know the
+template syntax or implement a template engine.
 
 ### Version Management
 
@@ -295,76 +340,56 @@ With the registry, deploying v2 means creating a new version of the artifact. Ro
 means pointing the application to version 1. The application code does not change:
 
 ```java
-// Fetch the latest version
-ApicurioPromptTemplate template = promptRegistry.getTemplate(SYSTEM_PROMPT_ARTIFACT);
+// Render the latest version via /render endpoint
+String rendered = renderPrompt(SYSTEM_PROMPT_ARTIFACT, null, variables); // null = latest
 
-// Or fetch a specific version for A/B testing
-ApicurioPromptTemplate templateV1 = promptRegistry.getTemplate(SYSTEM_PROMPT_ARTIFACT, "1");
-ApicurioPromptTemplate templateV2 = promptRegistry.getTemplate(SYSTEM_PROMPT_ARTIFACT, "2");
+// Or render a specific version for A/B testing
+String renderedV1 = renderPrompt(SYSTEM_PROMPT_ARTIFACT, "1.0.0", variables);
+String renderedV2 = renderPrompt(SYSTEM_PROMPT_ARTIFACT, "2.0.0", variables);
 ```
 
 This is the same pattern as schema version resolution in Kafka. The producer does not
 decide which schema version to use at compile time -- it resolves it at runtime. The same
 principle applies here.
 
-### The ApicurioPromptRegistry API
+### The /render Endpoint Pattern
 
-The `ApicurioPromptRegistry` class is the bridge between the Quarkus application and the
-registry. It wraps the Apicurio Registry REST client and provides a typed API for prompt
-operations:
+The bridge between the Quarkus application and the registry is the `/render` endpoint.
+Instead of fetching raw template content and implementing variable substitution in the
+application, the application sends variables to the registry and receives the fully
+rendered prompt:
 
 ```java
-public class ApicurioPromptRegistry {
+private String renderPrompt(String artifactId, String version, Map<String, Object> variables) {
+    String versionExpression = version != null ? version : "branch=latest";
+    String path = String.format(
+        "/apis/registry/v3/groups/%s/artifacts/%s/versions/%s/render",
+        registryGroup, artifactId, versionExpression
+    );
 
-    @Inject
-    RegistryClient registryClient;
+    Map<String, Object> requestBody = Map.of("variables", variables);
+    String jsonBody = MAPPER.writeValueAsString(requestBody);
 
-    public ApicurioPromptTemplate getTemplate(String artifactId) {
-        // Fetches the latest version of the prompt template
-        // Parses the JSON content into an ApicurioPromptTemplate
-        // Caches the result (with TTL-based invalidation)
-    }
+    var response = webClient.post(path)
+        .putHeader("Content-Type", "application/json")
+        .sendBuffer(Buffer.buffer(jsonBody))
+        .toCompletionStage()
+        .toCompletableFuture()
+        .get();
 
-    public ApicurioPromptTemplate getTemplate(String artifactId, String version) {
-        // Fetches a specific version
-        // Useful for A/B testing or rollback
-    }
-
-    public List<PromptMetadata> listTemplates() {
-        // Lists all PROMPT_TEMPLATE artifacts in the registry
-        // Returns metadata (name, description, version count)
-    }
+    JsonNode responseJson = MAPPER.readTree(response.bodyAsString());
+    return responseJson.get("rendered").asText();
 }
 ```
 
-The `ApicurioPromptTemplate` class wraps the template content and provides the `apply`
-method for variable substitution:
+This is deliberately simple. The registry handles template parsing, variable validation,
+and substitution. The application does not need to know the template syntax (`{{variable}}`
+placeholders in the YAML template). If the registry later supports more sophisticated
+template features (conditionals, filters), the application benefits without code changes.
 
-```java
-public class ApicurioPromptTemplate {
-
-    private final String template;
-    private final List<String> variables;
-    private final Map<String, String> metadata;
-
-    public String apply(Map<String, Object> values) {
-        String result = template;
-        for (String variable : variables) {
-            Object value = values.get(variable);
-            if (value == null) {
-                throw new MissingVariableException(variable);
-            }
-            result = result.replace("{{" + variable + "}}", value.toString());
-        }
-        return result;
-    }
-}
-```
-
-This is deliberately simple. The template engine does not support conditionals, loops,
-or filters. Prompt templates should be flat text with variable substitution. If you need
-complex logic in your prompt construction, that logic belongs in your application code,
-not in the template. The template is the contract; the application is the implementation.
+The version expression `"branch=latest"` is a registry concept that resolves to the most
+recent version of an artifact. For A/B testing or rollback, you pass a specific version
+string instead.
 
 ### The Cache Invalidation Problem
 
@@ -418,7 +443,7 @@ has four stages:
 1. **Fetch** -- Download HTML pages from the Apicurio documentation site
 2. **Parse** -- Extract text content from the HTML using JSoup
 3. **Chunk** -- Split the text into segments of 500 tokens with 50-token overlap
-4. **Embed** -- Generate vector embeddings for each chunk using `nomic-embed-text`
+4. **Embed** -- Generate vector embeddings for each chunk using the in-process ONNX model
 
 These stages run once at application startup, triggered by a CDI `StartupEvent`:
 
@@ -552,37 +577,37 @@ tokenization. For `nomic-embed-text`, this means the actual character count per 
 varies, but the semantic density is consistent. This is preferable to splitting by
 character count, which can produce chunks that are semantically unbalanced.
 
-### Why nomic-embed-text
+### Why In-Process ONNX Embeddings (bge-small-en-v15-q)
 
 The embedding model choice is one of the most consequential decisions in a RAG pipeline,
 and it deserves more attention than it typically gets.
 
-`nomic-embed-text` is a 137M-parameter embedding model that produces 768-dimensional
-vectors. It is available through Ollama, which means it runs locally alongside the chat
-model. Here is why I chose it:
+The current version uses `langchain4j-embeddings-bge-small-en-v15-q`, a quantized ONNX
+model that runs directly inside the JVM. Here is why:
 
-**Performance on retrieval benchmarks.** On the MTEB (Massive Text Embedding Benchmark),
-`nomic-embed-text` scores competitively with models 3-5x its size. For technical
-documentation retrieval specifically, it outperforms `all-MiniLM-L6-v2` (the default
-in many tutorials) by a meaningful margin. The difference is visible in practice: queries
-like "How do I configure Kafka storage in Apicurio Registry" reliably return the correct
-documentation section with `nomic-embed-text`, while `all-MiniLM-L6-v2` sometimes returns
-sections about storage in general.
+**No external service.** The embedding model is a Maven dependency. It loads at JVM
+startup and runs inference on CPU inside the application process. No Ollama, no GPU
+instance, no network calls for embedding generation. This is the single biggest
+operational simplification in the project.
 
-**Inference speed.** At 137M parameters, embedding generation is fast even on CPU. The
-full ingestion of 12 HTML pages (approximately 300-400 chunks) completes in under 30
-seconds. With a GPU, it is under 5 seconds.
+**Performance on retrieval benchmarks.** BGE-small-en-v15 scores competitively on the
+MTEB (Massive Text Embedding Benchmark) for retrieval tasks. For technical documentation
+retrieval specifically, it reliably distinguishes between similar but distinct topics --
+"Kafka storage configuration" vs "SQL storage configuration" return different, correct
+documentation sections.
 
-**Dimensionality.** 768 dimensions is a good balance between representation capacity and
-memory usage. Higher-dimensional models (1024, 1536) capture more nuance but use more
-memory for the in-memory embedding store. For a corpus of 300-400 chunks, memory is not a
-concern, but the habit of choosing appropriately-sized models pays off when the corpus
-grows.
+**Inference speed.** The quantized model runs fast on CPU. The full ingestion of 12 HTML
+pages (approximately 300-400 chunks) completes in under 30 seconds without a GPU.
 
-**Availability through Ollama.** This is a practical consideration. Using Ollama for both
-chat and embeddings means one fewer service to deploy and manage. The alternative --
-running a separate embedding service like TEI (Text Embeddings Inference) -- adds
-operational complexity that is not justified for this project's scale.
+**Deployment simplicity.** The initial prototype used `nomic-embed-text` via Ollama. This
+required running Ollama as a separate service, adding container management, health checks,
+and model download logic. Moving to in-process ONNX eliminated an entire service from the
+Docker Compose stack.
+
+**The tradeoff.** In-process ONNX models are smaller than server-hosted models. For this
+project's corpus (12 HTML pages, ~400 chunks), the quality is more than sufficient. For a
+larger corpus with more nuanced retrieval requirements, a server-hosted model might
+produce better results.
 
 ### Similarity Thresholds
 
@@ -599,7 +624,7 @@ ContentRetriever retriever = EmbeddingStoreContentRetriever.builder()
 
 **`maxResults(5)`** -- return at most 5 chunks. This limits the context size sent to the
 LLM. Five chunks of 500 tokens each is 2,500 tokens of context, which leaves ample room
-for the system prompt, conversation history, and the model's response within `llama3.2`'s
+for the system prompt, conversation history, and the model's response within Gemini's
 context window.
 
 **`minScore(0.6)`** -- only return chunks with a cosine similarity score of 0.6 or higher.
@@ -754,7 +779,7 @@ of my time evaluating chat models: llama3.2 vs. mistral vs. phi-3. The differenc
 noticeable in conversational fluency but minimal in answer accuracy for documentation
 questions.
 
-Then I swapped the embedding model from `all-MiniLM-L6-v2` to `nomic-embed-text`, keeping
+Then I swapped the embedding model from `all-MiniLM-L6-v2` to `bge-small-en-v15`, keeping
 everything else constant. The improvement in answer accuracy was dramatic. Questions that
 previously returned irrelevant context -- and therefore produced incorrect answers -- now
 returned the correct documentation sections.
@@ -762,7 +787,7 @@ returned the correct documentation sections.
 The reason is straightforward: in a RAG system, the LLM can only work with the context it
 is given. If the retriever returns the wrong chunks, even GPT-4 will produce a wrong
 answer (it will just produce it more fluently). If the retriever returns the right chunks,
-even a smaller model like `llama3.2` will produce a correct answer.
+even a smaller model will produce a correct answer.
 
 **The embedding model determines what the LLM sees. The LLM determines how the LLM says
 it.** For factual question-answering over documentation, what the model sees matters more
@@ -905,23 +930,23 @@ To make the architecture concrete, here is the complete flow for a single chat r
    - Both may be served from cache if TTL has not expired
 
 4. RAG retrieval
-   - Embed the question using nomic-embed-text via Ollama
+   - Embed the question using the in-process ONNX model (bge-small-en-v15-q)
    - Search the EmbeddingStore for similar chunks
    - Filter by minScore >= 0.6
    - Return up to 5 matching chunks
-   - Concatenate chunk texts as "context"
+   - Concatenate chunk texts as additional context
 
 5. Prompt construction
    - Format conversation history for session-42
-   - Apply chat prompt template:
-     template.apply(Map.of(
-       "question", "How do I configure SQL storage...",
-       "context", "<concatenated RAG results>",
-       "history", "<formatted conversation history>"
-     ))
+   - Call the registry /render endpoint with variables:
+     POST /render with variables: {
+       "system_prompt": "<rendered system prompt + RAG context>",
+       "question": "How do I configure SQL storage...",
+       "conversation_history": "<formatted history>"
+     }
 
 6. LLM inference
-   - Send system prompt + rendered chat prompt to llama3.2 via Ollama
+   - Send rendered prompt to Gemini via the @RegisterAiService interface
    - Receive response
 
 7. Session update
@@ -941,44 +966,49 @@ LLM provides the synthesis (local, free, reproducible).
 
 ## Running the Project
 
-The project is designed to run with a single `docker-compose up`:
+The project requires a Google AI API key (free from
+[AI Studio](https://aistudio.google.com/apikey)) and Docker:
 
 ```bash
 # Clone the repository
 git clone https://github.com/Apicurio/apicurio-registry.git
 cd apicurio-registry/support-chat
 
+# Set your API key
+export GOOGLE_AI_GEMINI_API_KEY=your-api-key
+
+# Create prompt templates in the registry
+./scripts/create-prompts.sh
+
 # Start all services
 docker compose up -d
 
-# Wait for Ollama to pull models (first run only, may take several minutes)
-docker compose logs -f ollama
+# Create a session and chat
+curl -X POST http://localhost:8081/support/session
+curl -X POST http://localhost:8081/support/chat/{sessionId} \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How do I install Apicurio Registry?"}'
 
-# Test the chat endpoint
-curl -X POST http://localhost:8081/support/chat/test-session \
-  -H "Content-Type: text/plain" \
-  -d "How do I install Apicurio Registry?"
-
-# Test the quick ask endpoint
+# Quick ask (stateless)
 curl -X POST http://localhost:8081/support/ask \
-  -H "Content-Type: text/plain" \
-  -d "What artifact types does Apicurio Registry support?"
+  -H "Content-Type: application/json" \
+  -d '{"message": "What artifact types does Apicurio Registry support?"}'
 
 # Inspect current prompt templates
-curl http://localhost:8081/support/prompts/system-prompt
-
-# List available models
-curl http://localhost:8081/support/models
+curl http://localhost:8081/support/prompts/system
 ```
 
-The Docker Compose file defines three services:
+The Docker Compose file defines two services:
 
-- **apicurio-registry** on port 8080 -- the schema/prompt registry
-- **ollama** on port 11434 -- the LLM and embedding model provider
-- **support-chat** on port 8081 -- the Quarkus application
+- **apicurio-registry** on port 8080 -- Apicurio Registry 3.2.0 with `PROMPT_TEMPLATE` support
+- **support-chat** on port 8081 -- the Quarkus application with in-process ONNX embeddings
 
-On first startup, Ollama needs to download `llama3.2` (~2GB) and `nomic-embed-text`
-(~300MB). Subsequent startups are fast since the models are cached in a Docker volume.
+No local LLM server is required -- Gemini is a cloud API, and embeddings run inside the
+JVM. The chat widget can also be embedded on any website with a single script tag:
+
+```html
+<script src="http://localhost:8081/chat-widget.js"></script>
+```
 
 ---
 
@@ -992,7 +1022,8 @@ contracts. Prompt templates are data contracts. The connection is direct.
 The support-chat project demonstrates this by using Apicurio Registry
 to manage prompt templates and model metadata for a RAG-powered support chatbot. The
 architecture is simple: Quarkus for orchestration, LangChain4j for LLM abstraction,
-Ollama for local inference, and Apicurio Registry for prompt governance.
+Google AI Gemini for inference, in-process ONNX for embeddings, and Apicurio Registry
+for prompt governance.
 
 The engineering lessons extend beyond this specific project:
 
