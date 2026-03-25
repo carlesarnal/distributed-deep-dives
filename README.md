@@ -36,6 +36,12 @@ Building an MCP (Model Context Protocol) server that wraps Apicurio Registry for
 
 **Topics:** MCP protocol, AI agent tooling, tool surface design, security for AI operations, REST-to-MCP patterns
 
+### [Apicurio Registry as an Apache Iceberg REST Catalog](iceberg-catalog-registry/)
+
+Apicurio Registry 3.2.0 implements the Iceberg REST Catalog API, turning a schema registry into a table catalog for Spark, Trino, DuckDB, and more. Covers the concept mapping, CommitTable concurrency model, storage backend considerations, and why unified schema + table metadata governance matters.
+
+**Topics:** Apache Iceberg, REST Catalog API, optimistic concurrency, CommitTable, schema evolution, data lakehouse, query engine integration
+
 ### [Model Agreement as a Proxy for Ground Truth in Streaming ML](model-agreement-ground-truth/)
 
 When you deploy ML models in a streaming pipeline, you don't have labels. Dual-model agreement rate, disagreement taxonomy, confidence calibration, and drift detection — all without ground truth.
@@ -57,6 +63,9 @@ distributed-deep-dives/
 │   ├── README.md
 │   └── examples/
 ├── rag-with-schema-registry/
+│   ├── README.md
+│   └── examples/
+├── iceberg-catalog-registry/
 │   ├── README.md
 │   └── examples/
 ├── mcp-servers-domain-ai/
